@@ -4,6 +4,7 @@ import (
     "time"
     "fmt"
     "golang.org/x/crypto/ssh"
+    "io"
 )
 
 func Connect(user, password, host string, port int) (*ssh.Session, error) {
@@ -29,4 +30,11 @@ func Connect(user, password, host string, port int) (*ssh.Session, error) {
         return nil, err
     }
     return client.NewSession()
+}
+func Shell(sess *ssh.Session, cmdComposer func(stdinBuf io.WriteCloser)) {
+    stdinBuf, _ := sess.StdinPipe()
+    sess.Shell()
+    cmdComposer(stdinBuf)
+    sess.Wait()
+    sess.Close()
 }
