@@ -5,6 +5,7 @@ import (
     "fmt"
     "golang.org/x/crypto/ssh"
     "io"
+    "github.com/golang/glog"
 )
 
 func Connect(user, password, host string, port int) (*ssh.Session, error) {
@@ -31,10 +32,32 @@ func Connect(user, password, host string, port int) (*ssh.Session, error) {
     }
     return client.NewSession()
 }
-func Shell(sess *ssh.Session, cmdComposer func(stdinBuf io.WriteCloser)) {
-    stdinBuf, _ := sess.StdinPipe()
+
+type CmdComposer interface {
+    Write(cmd string)
+}
+type cmdComposer struct {
+    stdinBuf io.WriteCloser
+}
+
+func (composer *cmdComposer) Write(cmd string) {
+    composer.stdinBuf.Write([]byte(cmd))
+    composer.stdinBuf.Write([]byte("\n"))
+}
+
+func newCmdComposer(sess *ssh.Session) CmdComposer {
+    stdinBuf, err := sess.StdinPipe()
+    if err != nil {
+        glog.Errorf("Failed to create stdin pipe: %v", err)
+    }
+    return &cmdComposer{stdinBuf}
+}
+
+func Shell(sess *ssh.Session, cmdComposeCallback func(composer CmdComposer)) {
+    composer := newCmdComposer(sess)
     sess.Shell()
-    cmdComposer(stdinBuf)
+    cmdComposeCallback(composer)
+    composer.Write("exit")
     sess.Wait()
     sess.Close()
 }
